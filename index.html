@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infrastruktur-Risiko WebGIS | Konstantinos Chantzis</title>
+<meta name="description" content="Interaktive Karte: Starkregenrisiko für Gebäude in Essen-Kupferdreh und Vegetationsrisiko entlang einer 110-kV-Freileitung (NRW).">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f6f5;--panel:#ffffff;--ink:#17201c;--muted:#5d6b64;--line:#dfe5e2;
+  --accent:#145a43;--accent-soft:#e3f0ea;
+  --r0:#a8a8a8;--r1:#f2d400;--r2:#f39200;--r3:#e00000;
+  --p1:#c0182c;--p2:#f07f13;--p3:#f2c500;--p4:#4f9d5c;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:14px}
+header{display:flex;align-items:center;gap:16px;padding:10px 16px;background:var(--accent);color:#fff;flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.2px}
+header .sub{font-size:12px;opacity:.8}
+.tabs{display:flex;gap:4px;margin-left:auto}
+.tabs button,.lang button{border:0;background:rgba(255,255,255,.12);color:#fff;padding:7px 12px;border-radius:6px;font:inherit;font-weight:600;cursor:pointer}
+.tabs button.on{background:#fff;color:var(--accent)}
+.lang{display:flex;gap:2px}
+.lang button{padding:7px 9px;font-weight:500}
+.lang button.on{background:rgba(255,255,255,.35)}
+main{display:grid;grid-template-columns:1fr 360px;height:calc(100% - 56px)}
+#map{height:100%;min-height:320px}
+aside{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:16px}
+aside h2{font-size:16px;margin:0 0 4px}
+aside p.lead{margin:0 0 14px;color:var(--muted);line-height:1.45;font-size:13px}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.kpi{background:var(--bg);border-radius:8px;padding:10px}
+.kpi b{display:block;font-size:20px;font-weight:700}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi.hot b{color:var(--r3)}
+h3{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:16px 0 8px}
+.bars .row{display:grid;grid-template-columns:96px 1fr 44px;align-items:center;gap:8px;margin:5px 0;font-size:13px}
+.bars .track{background:var(--bg);border-radius:4px;height:14px;overflow:hidden}
+.bars .fill{height:100%;border-radius:4px}
+.bars .n{text-align:right;font-variant-numeric:tabular-nums}
+.filters label{display:flex;align-items:center;gap:8px;margin:5px 0;cursor:pointer;font-size:13px}
+.sw{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.25)}
+.swl{width:22px;height:0;border-top:3px solid #1f5fe0;display:inline-block}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:5px 4px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--accent-soft)}
+.pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11.5px;font-weight:600;color:#fff}
+.note{font-size:12px;color:var(--muted);line-height:1.45;margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+.note a{color:var(--accent)}
+.leaflet-popup-content{font-family:Inter,system-ui,sans-serif;font-size:13px;line-height:1.45;min-width:190px}
+.leaflet-popup-content h4{margin:0 0 6px;font-size:14px}
+.leaflet-popup-content table td{border:0;padding:2px 0}
+.leaflet-popup-content table td:last-child{text-align:right;padding-left:12px;font-weight:600}
+.legend{background:#fff;padding:8px 10px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.25);font-size:12px;line-height:1.6}
+.legend b{display:block;margin-bottom:2px}
+.legend i{display:inline-block;width:12px;height:12px;margin-right:6px;vertical-align:-2px;border-radius:2px}
+[hidden]{display:none!important}
+.hn{font:600 10.5px Inter,system-ui,sans-serif;color:#222;text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff;white-space:nowrap;pointer-events:none;text-align:center}
+@media (max-width:860px){
+  main{grid-template-columns:1fr;grid-template-rows:55vh auto;height:auto}
+  aside{border-left:0;border-top:1px solid var(--line)}
+  .tabs{margin-left:0;width:100%}
+  .tabs button{flex:1}
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 data-i18n="title">Infrastruktur-Risiko WebGIS</h1>
+    <div class="sub">Konstantinos Chantzis · ArcGIS Pro · Leaflet</div>
+  </div>
+  <div class="tabs">
+    <button id="t7" class="on" data-i18n="tab7">Starkregen Kupferdreh</button>
+    <button id="t6" data-i18n="tab6">Vegetationsrisiko 110 kV</button>
+  </div>
+  <div class="lang"><button id="lde" class="on">DE</button><button id="len">EN</button></div>
+</header>
+<main>
+  <div id="map"></div>
+  <aside>
+    <!-- Project 7 -->
+    <section id="s7">
+      <h2 data-i18n="h7">Starkregen-Gefahrenanalyse Essen-Kupferdreh</h2>
+      <p class="lead" data-i18n="lead7">Senken und Fließwege aus dem DGM1 NRW (1 m) und eine Risikoklasse für jedes Gebäude. Klicken Sie auf ein Gebäude für Details.</p>
+      <div class="kpis">
+        <div class="kpi"><b id="k7a">–</b><span data-i18n="k7a">Gebäude analysiert</span></div>
+        <div class="kpi hot"><b id="k7b">–</b><span data-i18n="k7b">Hohes Risiko</span></div>
+        <div class="kpi"><b id="k7c">–</b><span data-i18n="k7c">mit Risiko (Klasse 1–3)</span></div>
+        <div class="kpi"><b id="k7d">–</b><span data-i18n="k7d">Fläche „Hoch“ an Gesamtfläche</span></div>
+      </div>
+      <h3 data-i18n="bars7">Gebäude je Risikoklasse</h3>
+      <div class="bars" id="bars7"></div>
+      <h3 data-i18n="show">Anzeigen</h3>
+      <div class="filters" id="f7"></div>
+      <h3 data-i18n="streets">Straßen mit den meisten Gebäuden „Hoch“</h3>
+      <table><thead><tr><th data-i18n="street">Straße</th><th class="num" data-i18n="high">Hoch</th><th class="num" data-i18n="all">Gesamt</th></tr></thead><tbody id="tb7"></tbody></table>
+      <div class="note" data-i18n-html="note7">Methode: Fill → Senkentiefe, Fließrichtung D8, Fließakkumulation, Fließwege ab 1.000 m² (Strahler), Zonale Statistik und räumliche Verbindung je Gebäude. Topografische Gefährdungsabschätzung, keine hydrodynamische Simulation. <a href="https://github.com/KonstantinosChantzis/Pluvial-Flood-Hazard-Buildings" target="_blank" rel="noopener">Projekt auf GitHub</a></div>
+    </section>
+    <!-- Project 6 -->
+    <section id="s6" hidden>
+      <h2 data-i18n="h6">Vegetationsrisiko 110-kV-Leitung 0285</h2>
+      <p class="lead" data-i18n="lead6">Baumkronenbedeckung je Spannfeld aus DOP10-Orthophotos (Random Trees). Die Farbe zeigt die Priorität für den Gehölzrückschnitt. Klicken Sie auf ein Spannfeld.</p>
+      <div class="kpis">
+        <div class="kpi"><b id="k6a">7,4 km</b><span data-i18n="k6a">Leitungslänge</span></div>
+        <div class="kpi"><b id="k6b">–</b><span data-i18n="k6b">Spannfelder</span></div>
+        <div class="kpi hot"><b id="k6c">–</b><span data-i18n="k6c">Priorität 1</span></div>
+        <div class="kpi"><b id="k6d">–</b><span data-i18n="k6d">Baumfläche 0–10 m</span></div>
+      </div>
+      <h3 data-i18n="bars6">Spannfelder je Priorität</h3>
+      <div class="bars" id="bars6"></div>
+      <h3 data-i18n="show">Anzeigen</h3>
+      <div class="filters" id="f6"></div>
+      <h3 data-i18n="top6">Rangfolge (Bedeckung 0–10 m)</h3>
+      <table><thead><tr><th>#</th><th data-i18n="span">Spannfeld</th><th data-i18n="towers">Masten</th><th class="num">%</th></tr></thead><tbody id="tb6"></tbody></table>
+      <div class="note" data-i18n-html="note6">Methode: Random-Trees-Klassifikation (4 Kanäle inkl. NIR), Mehrheitsfilter, Abstandszonen 0–10 / 10–20 / 20–30 m, Verschneidung je Spannfeld. Priorität: ≥ 50 % hoch, 25–50 % mittel, 10–25 % niedrig, &lt; 10 % gering. <a href="https://github.com/KonstantinosChantzis/Vegetation-Risk-Utility-Corridors" target="_blank" rel="noopener">Projekt auf GitHub</a></div>
+    </section>
+  </aside>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="data/data.js"></script>
+<script>
+const T={
+ de:{title:"Infrastruktur-Risiko WebGIS",tab7:"Starkregen Kupferdreh",tab6:"Vegetationsrisiko 110 kV",
+  h7:"Starkregen-Gefahrenanalyse Essen-Kupferdreh",lead7:"Senken und Fließwege aus dem DGM1 NRW (1 m) und eine Risikoklasse für jedes Gebäude. Klicken Sie auf ein Gebäude für Details.",
+  k7a:"Gebäude analysiert",k7b:"Hohes Risiko",k7c:"mit Risiko (Klasse 1–3)",k7d:"Fläche „Hoch“ an Gesamtfläche",bars7:"Gebäude je Risikoklasse",show:"Anzeigen",
+  streets:"Straßen mit den meisten Gebäuden „Hoch“",street:"Straße",high:"Hoch",all:"Gesamt",
+  note7:'Methode: Fill → Senkentiefe, Fließrichtung D8, Fließakkumulation, Fließwege ab 1.000 m² (Strahler), Zonale Statistik und räumliche Verbindung je Gebäude. Topografische Gefährdungsabschätzung, keine hydrodynamische Simulation. <a href="https://github.com/KonstantinosChantzis/Pluvial-Flood-Hazard-Buildings" target="_blank" rel="noopener">Projekt auf GitHub</a>',
+  h6:"Vegetationsrisiko 110-kV-Leitung 0285",lead6:"Baumkronenbedeckung je Spannfeld aus DOP10-Orthophotos (Random Trees). Die Farbe zeigt die Priorität für den Gehölzrückschnitt. Klicken Sie auf ein Spannfeld.",
+  k6a:"Leitungslänge",k6b:"Spannfelder",k6c:"Priorität 1",k6d:"Baumfläche 0–10 m",bars6:"Spannfelder je Priorität",top6:"Rangfolge (Bedeckung 0–10 m)",span:"Spannfeld",towers:"Masten",
+  note6:'Methode: Random-Trees-Klassifikation (4 Kanäle inkl. NIR), Mehrheitsfilter, Abstandszonen 0–10 / 10–20 / 20–30 m, Verschneidung je Spannfeld. Priorität: ≥ 50 % hoch, 25–50 % mittel, 10–25 % niedrig, &lt; 10 % gering. <a href="https://github.com/KonstantinosChantzis/Vegetation-Risk-Utility-Corridors" target="_blank" rel="noopener">Projekt auf GitHub</a>',
+  r:["Kein Risiko","Gering","Mittel","Hoch"],p:["","1 – hoch","2 – mittel","3 – niedrig","4 – gering"],
+  flow:"Fließwege",area:"Untersuchungsgebiet",line:"Leitung / Spannfelder",tw:"Masten",
+  building:"Gebäude",type:"Typ",fp:"Grundfläche",depth:"Max. Senkentiefe",strahler:"Fließweg (Strahler)",risk:"Risikoklasse",none:"–",
+  len:"Länge",c10:"Bedeckung 0–10 m",c20:"Bedeckung 10–20 m",c30:"Bedeckung 20–30 m",a10:"Baumfläche 0–10 m",prio:"Priorität",tower:"Mast",
+  base:"Grundkarte (grau)",streetmap:"Straßenkarte",img:"Luftbild",legR:"Risikoklasse",legP:"Priorität"},
+ en:{title:"Infrastructure Risk WebGIS",tab7:"Heavy rain Kupferdreh",tab6:"Vegetation risk 110 kV",
+  h7:"Pluvial flood hazard analysis Essen-Kupferdreh",lead7:"Terrain sinks and flow paths from DGM1 NRW (1 m) and a risk class for every building. Click a building for details.",
+  k7a:"Buildings analysed",k7b:"High risk",k7c:"at risk (classes 1–3)",k7d:"share of footprint at high risk",bars7:"Buildings per risk class",show:"Show",
+  streets:"Streets with the most high-risk buildings",street:"Street",high:"High",all:"Total",
+  note7:'Method: fill → sink depth, D8 flow direction, flow accumulation, flow paths from 1,000 m² (Strahler), zonal statistics and spatial join per building. Topographic screening, not a hydrodynamic simulation. <a href="https://github.com/KonstantinosChantzis/Pluvial-Flood-Hazard-Buildings" target="_blank" rel="noopener">Project on GitHub</a>',
+  h6:"Vegetation risk 110 kV line 0285",lead6:"Tree canopy cover per span from DOP10 orthophotos (Random Trees). Colour shows the priority for vegetation management. Click a span.",
+  k6a:"Line length",k6b:"Spans",k6c:"Priority 1",k6d:"Canopy area 0–10 m",bars6:"Spans per priority",top6:"Ranking (cover 0–10 m)",span:"Span",towers:"Towers",
+  note6:'Method: Random Trees classification (4 bands incl. NIR), majority filter, distance zones 0–10 / 10–20 / 20–30 m, overlay per span. Priority: ≥ 50 % high, 25–50 % medium, 10–25 % low, &lt; 10 % minor. <a href="https://github.com/KonstantinosChantzis/Vegetation-Risk-Utility-Corridors" target="_blank" rel="noopener">Project on GitHub</a>',
+  r:["No risk","Low","Medium","High"],p:["","1 – high","2 – medium","3 – low","4 – minor"],
+  flow:"Flow paths",area:"Study area",line:"Line / spans",tw:"Towers",
+  building:"Building",type:"Type",fp:"Footprint",depth:"Max. sink depth",strahler:"Flow path (Strahler)",risk:"Risk class",none:"–",
+  len:"Length",c10:"Cover 0–10 m",c20:"Cover 10–20 m",c30:"Cover 20–30 m",a10:"Canopy area 0–10 m",prio:"Priority",tower:"Tower",
+  base:"Base map (grey)",streetmap:"Street map",img:"Imagery",legR:"Risk class",legP:"Priority"}
+};
+let LANG='de';
+const t=k=>T[LANG][k];
+const RC=['#a8a8a8','#f2d400','#f39200','#e00000'];
+const PC=[null,'#c0182c','#f07f13','#f2c500','#4f9d5c'];
+const fmt=(n,d=0)=>n.toLocaleString(LANG==='de'?'de-DE':'en-GB',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+const map=L_init();
+function L_init(){
+  const m=window.L.map('map',{zoomControl:true,preferCanvas:true,maxZoom:20}).setView([51.391,7.088],15);
+  return m;
+}
+const Lf=window.L;
+const base={
+  map:Lf.layerGroup([
+    Lf.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:16,attribution:'Basemap &copy; Esri, TomTom, Garmin, FAO, NOAA, USGS, &copy; OpenStreetMap contributors, and the GIS User Community'}),
+    Lf.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:16,pane:'shadowPane'})
+  ]),
+  street:Lf.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Basemap &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS User Community'}),
+  img:Lf.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics'})
+};
+base.map.addTo(map);
+let baseCtl;
+function buildBaseCtl(){
+  if(baseCtl) baseCtl.remove();
+  const o={};o[t('base')]=base.map;o[t("streetmap")]=base.street;o[t('img')]=base.img;
+  baseCtl=Lf.control.layers(o,null,{position:'topright'}).addTo(map);
+}
+const legend=Lf.control({position:'bottomleft'});
+legend.onAdd=()=>{const d=Lf.DomUtil.create('div','legend');d.id='legend';return d};
+legend.addTo(map);
+
+const D={};
+const G7={},G6={};
+const vis7={0:true,1:true,2:true,3:true,flow:true,area:true};
+const vis6={1:true,2:true,3:true,4:true,tw:true};
+let tab='7';
+
+
+
+const HN={};
+function updateHN(){
+  HN.layer.clearLayers();
+  if(tab!=='7'||map.getZoom()<18){map.removeLayer(HN.layer);return}
+  const b=map.getBounds().pad(0.1);
+  HN.pts.forEach(p=>{if(vis7[p.r]&&b.contains(p.ll))HN.layer.addLayer(Lf.marker(p.ll,{interactive:false,keyboard:false,icon:Lf.divIcon({className:'hn',html:p.nr,iconSize:[40,14],iconAnchor:[20,7]})}))});
+  HN.layer.addTo(map);
+}
+function popupRow(k,v){return `<tr><td>${k}</td><td>${v}</td></tr>`}
+function bPopup(p){
+  const addr=[p.str,p.nr].filter(Boolean).join(' ');
+  return `<h4>${p.name||addr||t('building')+' '+p.id}</h4><table>`+
+   (p.name&&addr?popupRow('',addr):'')+
+   popupRow(t('type'),p.typ||t('none'))+popupRow(t('fp'),fmt(p.a)+' m²')+
+   popupRow(t('depth'),p.d==null?t('none'):fmt(p.d,2)+' m')+popupRow(t('strahler'),p.s||t('none'))+
+   popupRow(t('risk'),`<span class="pill" style="background:${RC[p.r]};color:${p.r==1?'#222':'#fff'}">${t('r')[p.r]}</span>`)+'</table>';
+}
+function sPopup(p){
+  return `<h4>${t('span')} ${p.no}: ${p.from} – ${p.to}</h4><table>`+
+   popupRow(t('len'),fmt(p.len)+' m')+popupRow(t('a10'),fmt(p.a10)+' m²')+
+   popupRow(t('c10'),fmt(p.c10,1)+' %')+popupRow(t('c20'),fmt(p.c20,1)+' %')+popupRow(t('c30'),fmt(p.c30,1)+' %')+
+   popupRow(t('prio'),`<span class="pill" style="background:${PC[p.p]};color:${p.p==3?'#222':'#fff'}">${t('p')[p.p]}</span>`)+'</table>';
+}
+
+function init(){
+  // ---- P7
+  G7.area=Lf.geoJSON(D.p7_study_area,{style:{color:'#145a43',weight:2,dashArray:'6 4',fill:false},interactive:false});
+  G7.flow=Lf.geoJSON(D.p7_flowpaths,{style:f=>({color:'#1f5fe0',weight:[0,.6,1,1.6,2.4,3.4,4.2][f.properties.s],opacity:.85}),interactive:false});
+  for(let r=0;r<4;r++){
+    G7[r]=Lf.geoJSON({type:'FeatureCollection',features:D.p7_buildings.features.filter(f=>f.properties.r===r)},
+      {style:{color:'#555',weight:.4,fillColor:RC[r],fillOpacity:r===0?.55:.9},onEachFeature:(f,l)=>l.bindPopup(()=>bPopup(f.properties))});
+  }
+  // house numbers (shown from zoom 18)
+  HN.pts=D.p7_buildings.features.filter(f=>f.properties.nr).map(f=>{
+    const c=f.geometry.type==='Polygon'?f.geometry.coordinates[0]:f.geometry.coordinates[0][0];
+    let x=0,y=0;c.forEach(p=>{x+=p[0];y+=p[1]});return {ll:[y/c.length,x/c.length],nr:f.properties.nr,r:f.properties.r};
+  });
+  HN.layer=Lf.layerGroup();
+  map.on('zoomend moveend',updateHN);
+  // ---- P6
+  for(let p=1;p<=4;p++){
+    G6[p]=Lf.geoJSON({type:'FeatureCollection',features:D.p6_spans.features.filter(f=>f.properties.p===p)},
+      {style:{color:PC[p],weight:7,opacity:.95,lineCap:'butt'},onEachFeature:(f,l)=>{l.bindPopup(()=>sPopup(f.properties));l.bindTooltip(()=>t('span')+' '+f.properties.no,{sticky:true})}});
+  }
+  G6.tw=Lf.geoJSON(D.p6_towers,{pointToLayer:(f,ll)=>Lf.circleMarker(ll,{radius:4,color:'#222',weight:1.5,fillColor:'#fff',fillOpacity:1}),
+     onEachFeature:(f,l)=>l.bindTooltip(()=>t('tower')+' '+(f.properties.ref||'o.Nr.'))});
+  stats();
+  render();
+  document.getElementById('t7').onclick=()=>{tab='7';render(true)};
+  document.getElementById('t6').onclick=()=>{tab='6';render(true)};
+  document.getElementById('lde').onclick=()=>{LANG='de';render()};
+  document.getElementById('len').onclick=()=>{LANG='en';render()};
+}
+
+const S={};
+function stats(){
+  const b=D.p7_buildings.features.map(f=>f.properties);
+  S.n=b.length;S.cnt=[0,0,0,0];S.area=[0,0,0,0];
+  b.forEach(p=>{S.cnt[p.r]++;S.area[p.r]+=p.a});
+  const st={};
+  b.forEach(p=>{if(!p.str)return;st[p.str]=st[p.str]||{h:0,n:0};st[p.str].n++;if(p.r===3)st[p.str].h++});
+  S.streets=Object.entries(st).filter(e=>e[1].h>0).sort((a,b)=>b[1].h-a[1].h).slice(0,8);
+  const s=D.p6_spans.features.map(f=>f.properties);
+  S.sp=s;S.pc=[0,0,0,0,0];s.forEach(p=>S.pc[p.p]++);
+  S.a10=s.reduce((x,p)=>x+p.a10,0);
+}
+
+function bars(el,labels,vals,colors){
+  const mx=Math.max(...vals);
+  el.innerHTML=labels.map((l,i)=>`<div class="row"><span>${l}</span><div class="track"><div class="fill" style="width:${vals[i]/mx*100}%;background:${colors[i]}"></div></div><span class="n">${fmt(vals[i])}</span></div>`).join('');
+}
+function filters(el,items,vis,groups){
+  el.innerHTML=items.map(it=>`<label><input type="checkbox" data-k="${it.k}" ${vis[it.k]?'checked':''}>${it.sw}${it.label}</label>`).join('');
+  el.querySelectorAll('input').forEach(i=>i.onchange=()=>{vis[i.dataset.k]=i.checked;applyLayers()});
+}
+function applyLayers(){
+  [G7,G6].forEach(G=>Object.values(G).forEach(l=>map.removeLayer(l)));
+  if(tab==='7'){
+    ['area','flow',0,1,2,3].forEach(k=>{if(vis7[k])G7[k].addTo(map)});
+  }else{
+    [4,3,2,1].forEach(k=>{if(vis6[k])G6[k].addTo(map)});
+    if(vis6.tw)G6.tw.addTo(map);
+  }
+  if(HN.layer)updateHN();
+}
+function render(fly){
+  document.documentElement.lang=LANG;
+  document.getElementById('lde').classList.toggle('on',LANG==='de');
+  document.getElementById('len').classList.toggle('on',LANG==='en');
+  document.getElementById('t7').classList.toggle('on',tab==='7');
+  document.getElementById('t6').classList.toggle('on',tab==='6');
+  document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));
+  document.querySelectorAll('[data-i18n-html]').forEach(e=>e.innerHTML=t(e.dataset.i18nHtml));
+  document.title=t('title')+' | Konstantinos Chantzis';
+  document.getElementById('s7').hidden=tab!=='7';
+  document.getElementById('s6').hidden=tab!=='6';
+  buildBaseCtl();
+  // P7 panel
+  document.getElementById('k7a').textContent=fmt(S.n);
+  document.getElementById('k7b').textContent=fmt(S.cnt[3]);
+  const atr=S.cnt[1]+S.cnt[2]+S.cnt[3];
+  document.getElementById('k7c').textContent=fmt(atr)+' ('+fmt(atr/S.n*100,1)+' %)';
+  const ta=S.area.reduce((a,b)=>a+b,0);
+  document.getElementById('k7d').textContent=fmt(S.area[3]/ta*100,1)+' %';
+  bars(document.getElementById('bars7'),[3,2,1,0].map(r=>t('r')[r]),[3,2,1,0].map(r=>S.cnt[r]),[3,2,1,0].map(r=>RC[r]));
+  filters(document.getElementById('f7'),[
+    ...[3,2,1,0].map(r=>({k:r,label:t('r')[r],sw:`<i class="sw" style="background:${RC[r]}"></i>`})),
+    {k:'flow',label:t('flow'),sw:'<i class="swl"></i>'},
+    {k:'area',label:t('area'),sw:'<i class="swl" style="border-top:2px dashed #145a43"></i>'}],vis7);
+  document.getElementById('tb7').innerHTML=S.streets.map(([s,v])=>`<tr data-s="${s}"><td>${s}</td><td class="num">${v.h}</td><td class="num">${v.n}</td></tr>`).join('');
+  document.querySelectorAll('#tb7 tr').forEach(tr=>tr.onclick=()=>{
+    const fs=D.p7_buildings.features.filter(f=>f.properties.str===tr.dataset.s&&f.properties.r===3);
+    if(tab!=='7'){tab='7';render()}
+    map.fitBounds(Lf.geoJSON({type:'FeatureCollection',features:fs}).getBounds(),{maxZoom:18,padding:[40,40]});
+  });
+  // P6 panel
+  document.getElementById('k6a').textContent=fmt(7.4,1)+' km';
+  document.getElementById('k6b').textContent=fmt(S.sp.length);
+  document.getElementById('k6c').textContent=fmt(S.pc[1]);
+  document.getElementById('k6d').textContent=fmt(42989)+' m²';
+  bars(document.getElementById('bars6'),[1,2,3,4].map(p=>t('p')[p]),[1,2,3,4].map(p=>S.pc[p]),[1,2,3,4].map(p=>PC[p]));
+  filters(document.getElementById('f6'),[
+    ...[1,2,3,4].map(p=>({k:p,label:t('p')[p],sw:`<i class="sw" style="background:${PC[p]}"></i>`})),
+    {k:'tw',label:t('tw'),sw:'<i class="sw" style="border-radius:50%;background:#fff;border:2px solid #222"></i>'}],vis6);
+  const top=[...S.sp].sort((a,b)=>b.c10-a.c10).slice(0,10);
+  document.getElementById('tb6').innerHTML=top.map((p,i)=>`<tr data-n="${p.no}"><td>${i+1}</td><td>${p.no}</td><td>${p.from} – ${p.to}</td><td class="num"><span class="pill" style="background:${PC[p.p]};color:${p.p==3?'#222':'#fff'}">${fmt(p.c10)}</span></td></tr>`).join('');
+  document.querySelectorAll('#tb6 tr').forEach(tr=>tr.onclick=()=>{
+    const f=D.p6_spans.features.find(f=>f.properties.no==tr.dataset.n);
+    const l=Lf.geoJSON(f);map.fitBounds(l.getBounds(),{maxZoom:18,padding:[60,60]});
+    Lf.popup().setLatLng(l.getBounds().getCenter()).setContent(sPopup(f.properties)).openOn(map);
+  });
+  // legend
+  const lg=document.getElementById('legend');
+  lg.innerHTML=tab==='7'
+    ? `<b>${t('legR')}</b>`+[3,2,1,0].map(r=>`<div><i style="background:${RC[r]}"></i>${t('r')[r]}</div>`).join('')+`<div><i style="background:none;border-top:3px solid #1f5fe0;height:0;width:14px;border-radius:0"></i>${t('flow')}</div>`
+    : `<b>${t('legP')}</b>`+[1,2,3,4].map(p=>`<div><i style="background:${PC[p]}"></i>${t('p')[p]}</div>`).join('');
+  applyLayers();
+  if(fly){
+    if(tab==='7') map.fitBounds(G7.area.getBounds(),{padding:[10,10]});
+    else{ map.fitBounds(Lf.featureGroup([G6[1],G6[2],G6[3],G6[4]]).getBounds(),{padding:[30,30]}); }
+  }
+  if(fly===undefined && !render.done){map.fitBounds(G7.area.getBounds(),{padding:[10,10]});render.done=true}
+}
+Object.assign(D,window.DATA);
+init();
+</script>
+</body>
+</html>
